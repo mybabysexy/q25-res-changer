@@ -34,6 +34,12 @@
         android:theme="@style/Theme.ResolutionChanger"
         android:sharedUserId="android.uid.system"
         tools:ignore="SharedUserIdMigration">
+
+        <!-- Static app shortcuts -->
+        <meta-data
+            android:name="android.app.shortcuts"
+            android:resource="@xml/shortcuts" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -41,10 +47,33 @@
             android:theme="@style/Theme.ResolutionChanger">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Activity for the Toggle Resolution shortcut -->
+        <activity
+            android:name=".ToggleShortcutActivity"
+            android:exported="true"
+            android:label="@string/shortcut_toggle_resolution"
+            android:theme="@style/Theme.ResolutionChanger">
+            <!-- Supports explicit/implicit VIEW and data URIs -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="app" android:host="resolutionchanger" android:pathPrefix="/preset" />
+            </intent-filter>
+            <!-- Custom explicit/implicit actions for automation -->
+            <intent-filter>
+                <action android:name="com.duc1607.resolutionchanger.action.SET_RESOLUTION" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="com.duc1607.resolutionchanger.action.SET_PRESET_INDEX" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
         <service
             android:name=".ResolutionTileService"
             android:label="@string/app_name"

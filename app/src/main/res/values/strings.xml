@@ -1,3 +1,12 @@
 <resources>
     <string name="app_name">Resolution Changer</string>
+    <string name="shortcut_toggle_resolution">Toggle resolution</string>
+    <string name="shortcut_toggle_resolution_long">Toggle resolution preset</string>
+    <!-- Added preset shortcut labels -->
+    <string name="shortcut_preset_0_short">Preset 0</string>
+    <string name="shortcut_preset_0_long">Set resolution preset 0</string>
+    <string name="shortcut_preset_1_short">Preset 1</string>
+    <string name="shortcut_preset_1_long">Set resolution preset 1</string>
+    <string name="shortcut_preset_2_short">Preset 2</string>
+    <string name="shortcut_preset_2_long">Set resolution preset 2</string>
 </resources>

@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="toggle_resolution"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_toggle_resolution"
+        android:shortcutLongLabel="@string/shortcut_toggle_resolution_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.duc1607.resolutionchanger"
+            android:targetClass="com.duc1607.resolutionchanger.ToggleShortcutActivity" />
+    </shortcut>
+
+    <!-- Direct set preset 0/1/2 shortcuts via data URIs -->
+    <shortcut
+        android:shortcutId="set_preset_0"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_preset_0_short"
+        android:shortcutLongLabel="@string/shortcut_preset_0_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="app://resolutionchanger/preset/0"
+            android:targetPackage="com.duc1607.resolutionchanger"
+            android:targetClass="com.duc1607.resolutionchanger.ToggleShortcutActivity" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="set_preset_1"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_preset_1_short"
+        android:shortcutLongLabel="@string/shortcut_preset_1_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="app://resolutionchanger/preset/1"
+            android:targetPackage="com.duc1607.resolutionchanger"
+            android:targetClass="com.duc1607.resolutionchanger.ToggleShortcutActivity" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="set_preset_2"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_preset_2_short"
+        android:shortcutLongLabel="@string/shortcut_preset_2_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="app://resolutionchanger/preset/2"
+            android:targetPackage="com.duc1607.resolutionchanger"
+            android:targetClass="com.duc1607.resolutionchanger.ToggleShortcutActivity" />
+    </shortcut>
+</shortcuts>

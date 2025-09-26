@@ -15,4 +15,3 @@ object DefaultResolutions {
         Resolution(720, 1080),
     )
 }
-
