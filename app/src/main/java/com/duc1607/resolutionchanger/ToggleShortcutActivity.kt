@@ -14,7 +14,7 @@ class ToggleShortcutActivity : Activity() {
         val data: Uri? = intent?.data
         val extras = intent?.extras
 
-        val result: Pair<Boolean, String> = when (action) {
+        val result = when (action) {
             Intent.ACTION_VIEW -> {
                 // Support data URIs like: app://resolutionchanger/preset/{index}
                 if (data != null && data.scheme == "app" && data.host == "resolutionchanger") {
@@ -67,7 +67,6 @@ class ToggleShortcutActivity : Activity() {
             }
         }
 
-        Toast.makeText(this, result.second, Toast.LENGTH_SHORT).show()
         finish()
     }
 }

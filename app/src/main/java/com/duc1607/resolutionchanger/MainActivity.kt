@@ -55,7 +55,8 @@ import java.lang.reflect.Method
 
 data class Resolution(
     val width: Int,
-    val height: Int
+    val height: Int,
+    val description: String = ""
 ) {
     override fun toString(): String = "${width}x${height}"
 }
@@ -128,247 +129,32 @@ fun changeResolutionWithIWindowManager(
     windowManager: Any?,
     width: Int,
     height: Int
-): Pair<Boolean, String> {
-    return try {
-        if (windowManager == null) {
-            return Pair(false, "IWindowManager not available")
+) {
+    if (windowManager == null) {
+        return
+    }
+
+    try {
+        Log.d("ResolutionChanger", "Trying root shell command: wm size ${width}x${height}")
+        val process =
+            Runtime.getRuntime().exec(arrayOf("su", "-c", "wm size ${width}x${height}"))
+        val exitCode = process.waitFor()
+
+        val output = process.inputStream.bufferedReader().readText()
+        val errorOutput = process.errorStream.bufferedReader().readText()
+
+        Log.d("ResolutionChanger", "Root shell command output: $output")
+        if (errorOutput.isNotEmpty()) {
+            Log.d("ResolutionChanger", "Root shell command error output: $errorOutput")
         }
 
-        Log.d(
-            "ResolutionChanger",
-            "Attempting to change resolution to ${width}x${height} using IWindowManager"
-        )
-        Log.d("ResolutionChanger", "WindowManager class: ${windowManager.javaClass.name}")
-
-        // Method 1: Try setForcedDisplaySize using reflection with detailed logging
-        try {
-            val setForcedDisplaySizeMethod: Method = windowManager.javaClass.getMethod(
-                "setForcedDisplaySize",
-                Int::class.javaPrimitiveType,
-                Int::class.javaPrimitiveType,
-                Int::class.javaPrimitiveType
-            )
-            Log.d(
-                "ResolutionChanger",
-                "Found setForcedDisplaySize method: $setForcedDisplaySizeMethod"
-            )
-            Log.d(
-                "ResolutionChanger",
-                "Invoking with params: displayId=${Display.DEFAULT_DISPLAY}, width=$width, height=$height"
-            )
-
-            val result = setForcedDisplaySizeMethod.invoke(
-                windowManager,
-                Display.DEFAULT_DISPLAY,
-                width,
-                height
-            )
-            Log.d("ResolutionChanger", "Method invocation result: $result")
-            Log.d("ResolutionChanger", "Successfully changed resolution using setForcedDisplaySize")
-            return Pair(true, "Resolution changed to ${width}x${height} using IWindowManager")
-        } catch (e: Exception) {
-            Log.w("ResolutionChanger", "setForcedDisplaySize failed: ${e.message}")
-            Log.w("ResolutionChanger", "Exception type: ${e.javaClass.simpleName}")
-            e.printStackTrace()
+        if (exitCode == 0) {
+            Log.d("ResolutionChanger", "Root shell command succeeded")
+        } else {
+            Log.w("ResolutionChanger", "Root shell command failed with exit code $exitCode")
         }
-
-        // Method 2: Try with different parameter types (some Android versions use different signatures)
-        try {
-            Log.d("ResolutionChanger", "Trying alternative parameter types...")
-            val setForcedDisplaySizeMethod: Method = windowManager.javaClass.getMethod(
-                "setForcedDisplaySize",
-                Int::class.java,
-                Int::class.java,
-                Int::class.java
-            )
-            Log.d("ResolutionChanger", "Found alternative setForcedDisplaySize method")
-            val result = setForcedDisplaySizeMethod.invoke(
-                windowManager,
-                Display.DEFAULT_DISPLAY,
-                width,
-                height
-            )
-            Log.d("ResolutionChanger", "Alternative method result: $result")
-            return Pair(
-                true,
-                "Resolution changed to ${width}x${height} using alternative IWindowManager method"
-            )
-        } catch (e: Exception) {
-            Log.w("ResolutionChanger", "Alternative setForcedDisplaySize failed: ${e.message}")
-        }
-
-        // Method 3: Try overrideDisplayInfo (newer Android versions)
-        try {
-            Log.d("ResolutionChanger", "Trying overrideDisplayInfo method...")
-            val overrideDisplayInfoMethod: Method = windowManager.javaClass.getMethod(
-                "overrideDisplayInfo",
-                Int::class.javaPrimitiveType,
-                Any::class.java  // DisplayInfo object
-            )
-            Log.d("ResolutionChanger", "Found overrideDisplayInfo method")
-            // This requires creating a DisplayInfo object, which is complex
-            Log.d(
-                "ResolutionChanger",
-                "overrideDisplayInfo requires DisplayInfo object - skipping for now"
-            )
-        } catch (e: Exception) {
-            Log.w("ResolutionChanger", "overrideDisplayInfo not available: ${e.message}")
-        }
-
-        // Method 4: Try setDisplayOverrideConfiguration
-        try {
-            Log.d("ResolutionChanger", "Trying setDisplayOverrideConfiguration...")
-            val setDisplayOverrideConfigMethod: Method = windowManager.javaClass.getMethod(
-                "setDisplayOverrideConfiguration",
-                Any::class.java,  // Configuration
-                Int::class.javaPrimitiveType
-            )
-            Log.d("ResolutionChanger", "Found setDisplayOverrideConfiguration method")
-            // This also requires creating a Configuration object
-            Log.d(
-                "ResolutionChanger",
-                "setDisplayOverrideConfiguration requires Configuration object - skipping for now"
-            )
-        } catch (e: Exception) {
-            Log.w(
-                "ResolutionChanger",
-                "setDisplayOverrideConfiguration not available: ${e.message}"
-            )
-        }
-
-        // Method 5: List all available methods for debugging
-        Log.d("ResolutionChanger", "Available methods in IWindowManager:")
-        val methods = windowManager.javaClass.methods
-        for (method in methods) {
-            if (method.name.contains("Display") || method.name.contains("Size") || method.name.contains(
-                    "Resolution"
-                )
-            ) {
-                Log.d(
-                    "ResolutionChanger",
-                    "Method: ${method.name}, Parameters: ${method.parameterTypes.contentToString()}"
-                )
-            }
-        }
-
-        // Method 6: Try alternative method names using reflection
-        try {
-            Log.d("ResolutionChanger", "Searching for alternative methods...")
-            for (method in methods) {
-                if ((method.name.contains("setDisplaySize") || method.name.contains("setForcedSize") ||
-                            method.name.contains("setOverrideDisplayModeSize")) && method.parameterTypes.size == 3
-                ) {
-                    try {
-                        Log.d("ResolutionChanger", "Trying method: ${method.name}")
-                        val result =
-                            method.invoke(windowManager, Display.DEFAULT_DISPLAY, width, height)
-                        Log.d("ResolutionChanger", "Method ${method.name} result: $result")
-                        Log.d(
-                            "ResolutionChanger",
-                            "Successfully changed resolution using ${method.name}"
-                        )
-                        return Pair(
-                            true,
-                            "Resolution changed to ${width}x${height} using ${method.name}"
-                        )
-                    } catch (e: Exception) {
-                        Log.w("ResolutionChanger", "Method ${method.name} failed: ${e.message}")
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Log.w("ResolutionChanger", "Alternative method search failed: ${e.message}")
-        }
-
-
-        // Method 7: Use Runtime.exec() to run wm size
-        try {
-            Log.d("ResolutionChanger", "Trying shell command: wm size ${width}x${height}")
-
-            // Split the command properly - wm is the command, size and resolution are arguments
-            val process =
-                Runtime.getRuntime().exec(arrayOf("sh", "-c", "wm size ${width}x${height}"))
-            val exitCode = process.waitFor()
-
-            // Read any output for debugging
-            val output = process.inputStream.bufferedReader().readText()
-            val errorOutput = process.errorStream.bufferedReader().readText()
-
-            Log.d("ResolutionChanger", "Shell command output: $output")
-            if (errorOutput.isNotEmpty()) {
-                Log.d("ResolutionChanger", "Shell command error output: $errorOutput")
-            }
-
-            if (exitCode == 0) {
-                Log.d("ResolutionChanger", "Shell command succeeded")
-                return Pair(true, "Resolution changed to ${width}x${height} using shell command")
-            } else {
-                Log.w("ResolutionChanger", "Shell command failed with exit code $exitCode")
-
-                // Try alternative approach - direct wm command
-                try {
-                    Log.d("ResolutionChanger", "Trying direct wm command...")
-                    val processAlt =
-                        Runtime.getRuntime().exec(arrayOf("wm", "size", "${width}x${height}"))
-                    val exitCodeAlt = processAlt.waitFor()
-
-                    if (exitCodeAlt == 0) {
-                        Log.d("ResolutionChanger", "Direct wm command succeeded")
-                        return Pair(
-                            true,
-                            "Resolution changed to ${width}x${height} using direct wm command"
-                        )
-                    } else {
-                        Log.w(
-                            "ResolutionChanger",
-                            "Direct wm command also failed with exit code $exitCodeAlt"
-                        )
-                    }
-                } catch (e: Exception) {
-                    Log.w("ResolutionChanger", "Direct wm command failed: ${e.message}")
-                }
-            }
-        } catch (e: Exception) {
-            Log.w("ResolutionChanger", "Shell command failed: ${e.message}")
-        }
-
-        // Method 9: use root
-        try {
-            Log.d("ResolutionChanger", "Trying root shell command: wm size ${width}x${height}")
-            val process =
-                Runtime.getRuntime().exec(arrayOf("su", "-c", "wm size ${width}x${height}"))
-            val exitCode = process.waitFor()
-
-            val output = process.inputStream.bufferedReader().readText()
-            val errorOutput = process.errorStream.bufferedReader().readText()
-
-            Log.d("ResolutionChanger", "Root shell command output: $output")
-            if (errorOutput.isNotEmpty()) {
-                Log.d("ResolutionChanger", "Root shell command error output: $errorOutput")
-            }
-
-            if (exitCode == 0) {
-                Log.d("ResolutionChanger", "Root shell command succeeded")
-                return Pair(
-                    true,
-                    "Resolution changed to ${width}x${height} using root shell command"
-                )
-            } else {
-                Log.w("ResolutionChanger", "Root shell command failed with exit code $exitCode")
-            }
-        } catch (e: Exception) {
-            Log.w("ResolutionChanger", "Root shell command failed: ${e.message}")
-        }
-
-        Pair(
-            false,
-            "All IWindowManager methods failed. This may require system-level permissions, rooted device, or the device doesn't support forced display size changes."
-        )
-
     } catch (e: Exception) {
-        Log.e("ResolutionChanger", "IWindowManager resolution change failed: ${e.message}")
-        e.printStackTrace()
-        Pair(false, "Error using IWindowManager: ${e.message}")
+        Log.w("ResolutionChanger", "Root shell command failed: ${e.message}")
     }
 }
 
@@ -388,15 +174,10 @@ fun MainScreen() {
     fun changeResolution(resolution: Resolution) {
         coroutineScope.launch {
             val activity = context as MainActivity
-            val (success, message) = changeResolutionWithIWindowManager(
+            changeResolutionWithIWindowManager(
                 activity.windowManagerInterface,
                 resolution.width,
                 resolution.height
-            )
-
-            snackbarHostState.showSnackbar(
-                message = message,
-                actionLabel = "OK"
             )
         }
     }
@@ -427,7 +208,9 @@ fun MainScreen() {
                 .padding(16.dp)
         ) {
             LazyColumn(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(resolutions) { resolution ->
@@ -437,6 +220,14 @@ fun MainScreen() {
                     )
                 }
             }
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "Made with ❤️ by duc1607",
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
 
         if (showDialog) {
@@ -475,11 +266,14 @@ fun ResolutionItem(resolution: Resolution, onClick: () -> Unit) {
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
-            Text(
-                text = "Width: ${resolution.width}px • Height: ${resolution.height}px",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            if (resolution.description.isNotBlank()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = resolution.description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
         }
     }
 }

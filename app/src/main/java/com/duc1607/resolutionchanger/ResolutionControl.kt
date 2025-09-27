@@ -35,9 +35,9 @@ object ResolutionControl {
     }
 
     // Advances to next preset and applies it. Returns Pair<success, message>
-    fun toggleNext(context: Context): Pair<Boolean, String> {
+    fun toggleNext(context: Context) {
         val list = resolutions()
-        if (list.isEmpty()) return Pair(false, "No resolutions configured")
+        if (list.isEmpty()) return
         val nextIndex = (getCurrentIndex(context) + 1) % list.size
         val res = list[nextIndex]
         setCurrentIndex(context, nextIndex)

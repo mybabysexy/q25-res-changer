@@ -15,11 +15,8 @@ class ResolutionTileService : TileService() {
 
     override fun onClick() {
         super.onClick()
-        val (success, message) = ResolutionControl.toggleNext(this)
+        ResolutionControl.toggleNext(this)
         updateTileLabel()
-        if (!success) {
-            Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
-        }
     }
 
     private fun updateTileLabel() {
