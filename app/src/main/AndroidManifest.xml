@@ -3,7 +3,7 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <!-- Essential system permissions for window management -->
-    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" />
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" tools:ignore="ProtectedPermissions"/>
     <uses-permission android:name="android.permission.CHANGE_CONFIGURATION" />
 
     <!-- Additional system permissions -->
@@ -49,6 +49,9 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE_PREFERENCES" />
+            </intent-filter>
         </activity>
 
         <!-- Activity for the Toggle Resolution shortcut -->
@@ -80,7 +83,7 @@
             android:icon="@android:drawable/ic_menu_zoom"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
             android:exported="true"
-            android:settingsActivity="com.duc1607.resolutionchanger.MainActivity">
+            android:settingsActivity="com.duc1607.resolutionchanger/.MainActivity">
             <intent-filter>
                 <action android:name="android.service.quicksettings.action.QS_TILE" />
             </intent-filter>
