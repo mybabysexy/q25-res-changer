@@ -8,7 +8,6 @@ import android.os.Bundle
 import android.os.IBinder
 import android.provider.Settings
 import android.util.Log
-import android.view.Display
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -50,8 +49,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.duc1607.resolutionchanger.ui.theme.ResolutionChangerTheme
+import java.io.InputStream
 import kotlinx.coroutines.launch
-import java.lang.reflect.Method
+import androidx.compose.runtime.LaunchedEffect
+import rikka.shizuku.Shizuku
 
 data class Resolution(
     val width: Int,
@@ -63,13 +64,42 @@ data class Resolution(
 
 class MainActivity : ComponentActivity() {
 
-    private fun hasWriteSecureSettingsPermission(): Boolean {
-        return checkSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS) == PackageManager.PERMISSION_GRANTED
+    companion object {
+        private const val REQUEST_CODE_SHIZUKU = 1000
     }
 
-    private fun canWriteSettings(): Boolean {
-        return Settings.System.canWrite(this)
+    // Track Shizuku permission usability (true = binder alive & permission granted)
+    var shizukuPermissionGranted by mutableStateOf(false)
+        private set
+
+    private val binderReceivedListener = Shizuku.OnBinderReceivedListener {
+        Log.d("ResolutionChanger", "Shizuku binder received")
+        if (Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
+            shizukuPermissionGranted = true
+            Log.d("ResolutionChanger", "Shizuku permission already granted on binder receipt")
+        } else {
+            Log.d("ResolutionChanger", "Requesting Shizuku permission after binder receipt")
+            Shizuku.requestPermission(REQUEST_CODE_SHIZUKU)
+        }
     }
+
+    private val binderDeadListener = Shizuku.OnBinderDeadListener {
+        Log.w("ResolutionChanger", "Shizuku binder dead")
+        shizukuPermissionGranted = false
+    }
+
+    private val permissionListener = Shizuku.OnRequestPermissionResultListener { code, result ->
+        if (code == REQUEST_CODE_SHIZUKU) {
+            val granted = result == PackageManager.PERMISSION_GRANTED
+            shizukuPermissionGranted = granted
+            Log.d("ResolutionChanger", "Shizuku permission result: granted=$granted")
+        }
+    }
+
+    private fun hasWriteSecureSettingsPermission(): Boolean =
+        checkSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS) == PackageManager.PERMISSION_GRANTED
+
+    private fun canWriteSettings(): Boolean = Settings.System.canWrite(this)
 
     var windowManagerInterface: Any? = null
         private set
@@ -84,12 +114,34 @@ class MainActivity : ComponentActivity() {
         // Initialize IWindowManager using reflection
         initializeWindowManager()
 
-        enableEdgeToEdge()
-        setContent {
-            ResolutionChangerTheme {
-                MainScreen()
+        // Register Shizuku listeners
+        Shizuku.addBinderReceivedListenerSticky(binderReceivedListener)
+        Shizuku.addBinderDeadListener(binderDeadListener)
+        Shizuku.addRequestPermissionResultListener(permissionListener)
+
+        // Initial Shizuku state check
+        if (Shizuku.pingBinder()) {
+            Log.d("ResolutionChanger", "Shizuku binder ping success in onCreate")
+            if (Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
+                shizukuPermissionGranted = true
+                Log.d("ResolutionChanger", "Shizuku permission already granted at startup")
+            } else {
+                Log.d("ResolutionChanger", "Requesting Shizuku permission at startup")
+                Shizuku.requestPermission(REQUEST_CODE_SHIZUKU)
             }
+        } else {
+            Log.d("ResolutionChanger", "Shizuku binder not available at startup")
         }
+
+        enableEdgeToEdge()
+        setContent { ResolutionChangerTheme { MainScreen() } }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        Shizuku.removeBinderReceivedListener(binderReceivedListener)
+        Shizuku.removeBinderDeadListener(binderDeadListener)
+        Shizuku.removeRequestPermissionResultListener(permissionListener)
     }
 
     private fun initializeWindowManager() {
@@ -99,7 +151,6 @@ class MainActivity : ComponentActivity() {
             val getServiceMethod = serviceManagerClass.getMethod("getService", String::class.java)
             val windowManagerBinder =
                 getServiceMethod.invoke(null, Context.WINDOW_SERVICE) as IBinder
-
             val windowManagerStubClass = Class.forName("android.view.IWindowManager\$Stub")
             val asInterfaceMethod =
                 windowManagerStubClass.getMethod("asInterface", IBinder::class.java)
@@ -111,17 +162,70 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    fun getCurrentResolution(): Resolution {
-        return try {
-            val windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-            val display = windowManager.defaultDisplay
-            val size = Point()
-            display.getRealSize(size)
-            Resolution(size.x, size.y)
-        } catch (e: Exception) {
-            Log.e("ResolutionChanger", "Failed to get current resolution: ${e.message}")
-            Resolution(1080, 1920) // Default fallback
+    fun getCurrentResolution(): Resolution = try {
+        val windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        val display = windowManager.defaultDisplay
+        val size = Point()
+        display.getRealSize(size)
+        Resolution(size.x, size.y)
+    } catch (e: Exception) {
+        Log.e("ResolutionChanger", "Failed to get current resolution: ${e.message}")
+        Resolution(1080, 1920)
+    }
+}
+
+private fun runElevatedShell(vararg args: String): Boolean {
+    val joined = args.joinToString(" ")
+    // Try Shizuku via reflection (avoid direct call to private newProcess)
+    try {
+        if (Shizuku.pingBinder() && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
+            Log.d("ResolutionChanger", "Attempt Shizuku exec: $joined")
+            val method = Shizuku::class.java.getDeclaredMethod(
+                "newProcess",
+                Array<String>::class.java,
+                Array<String>::class.java,
+                String::class.java
+            )
+            method.isAccessible = true
+            val processObj = method.invoke(null, args, null, null)
+            val procClass = processObj.javaClass
+            val waitForMethod = procClass.getMethod("waitFor")
+            val exitCode = waitForMethod.invoke(processObj) as Int
+            val getInputStream = procClass.getMethod("getInputStream")
+            val getErrorStream = procClass.getMethod("getErrorStream")
+            val stdout =
+                (getInputStream.invoke(processObj) as InputStream).bufferedReader().readText()
+            val stderr =
+                (getErrorStream.invoke(processObj) as InputStream).bufferedReader().readText()
+            Log.d("ResolutionChanger", "Shizuku stdout: $stdout")
+            if (stderr.isNotBlank()) Log.w("ResolutionChanger", "Shizuku stderr: $stderr")
+            if (exitCode == 0) return true else Log.w(
+                "ResolutionChanger",
+                "Shizuku exitCode=$exitCode; fallback to root"
+            )
+        } else {
+            Log.d(
+                "ResolutionChanger",
+                "Shizuku not usable; binder=${Shizuku.pingBinder()} perm=${Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED}"
+            )
         }
+    } catch (e: Exception) {
+        Log.w("ResolutionChanger", "Shizuku reflection exec failed: ${e.message}; fallback to root")
+    }
+
+    // Root fallback
+    return try {
+        Log.d("ResolutionChanger", "Root exec: $joined")
+        val process = Runtime.getRuntime().exec(arrayOf("su", "-c", joined))
+        val exitCode = process.waitFor()
+        val stdout = process.inputStream.bufferedReader().readText()
+        val stderr = process.errorStream.bufferedReader().readText()
+        Log.d("ResolutionChanger", "Root stdout: $stdout")
+        if (stderr.isNotBlank()) Log.w("ResolutionChanger", "Root stderr: $stderr")
+        exitCode == 0
+    } catch (e: Exception) {
+        Log.w("ResolutionChanger", "Root exec failed: ${e.message}")
+        false
     }
 }
 
@@ -131,51 +235,36 @@ fun changeResolutionWithIWindowManager(
     height: Int
 ) {
     if (windowManager == null) {
+        Log.w("ResolutionChanger", "windowManagerInterface is null; aborting resolution change")
         return
     }
-
-    try {
-        Log.d("ResolutionChanger", "Trying root shell command: wm size ${width}x${height}")
-        val process =
-            Runtime.getRuntime().exec(arrayOf("su", "-c", "wm size ${width}x${height}"))
-        val exitCode = process.waitFor()
-
-        val output = process.inputStream.bufferedReader().readText()
-        val errorOutput = process.errorStream.bufferedReader().readText()
-
-        Log.d("ResolutionChanger", "Root shell command output: $output")
-        if (errorOutput.isNotEmpty()) {
-            Log.d("ResolutionChanger", "Root shell command error output: $errorOutput")
-        }
-
-        if (exitCode == 0) {
-            Log.d("ResolutionChanger", "Root shell command succeeded")
-        } else {
-            Log.w("ResolutionChanger", "Root shell command failed with exit code $exitCode")
-        }
-    } catch (e: Exception) {
-        Log.w("ResolutionChanger", "Root shell command failed: ${e.message}")
-    }
+    val success = runElevatedShell("wm", "size", "${width}x${height}")
+    Log.d("ResolutionChanger", "Resolution change command success=$success")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen() {
     var showDialog by remember { mutableStateOf(false) }
-    var resolutions by remember {
-        mutableStateOf(
-            DefaultResolutions.all
-        )
-    }
+    var resolutions by remember { mutableStateOf(DefaultResolutions.all) }
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
+    val activity = context as? MainActivity
+
+    // Show snackbar when Shizuku availability changes
+    LaunchedEffect(activity?.shizukuPermissionGranted) {
+        activity?.let {
+            if (it.shizukuPermissionGranted) snackbarHostState.showSnackbar("Shizuku ready: elevated commands will use Shizuku")
+            else snackbarHostState.showSnackbar("Shizuku unavailable or permission denied; using root fallback")
+        }
+    }
 
     fun changeResolution(resolution: Resolution) {
         coroutineScope.launch {
-            val activity = context as MainActivity
+            val act = context as MainActivity
             changeResolutionWithIWindowManager(
-                activity.windowManagerInterface,
+                act.windowManagerInterface,
                 resolution.width,
                 resolution.height
             )
@@ -216,8 +305,7 @@ fun MainScreen() {
                 items(resolutions) { resolution ->
                     ResolutionItem(
                         resolution = resolution,
-                        onClick = { changeResolution(resolution) }
-                    )
+                        onClick = { changeResolution(resolution) })
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
@@ -256,11 +344,9 @@ fun ResolutionItem(resolution: Resolution, onClick: () -> Unit) {
             .clickable { onClick() },
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
+        Column(modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp)) {
             Text(
                 text = resolution.toString(),
                 style = MaterialTheme.typography.titleMedium,
@@ -279,10 +365,7 @@ fun ResolutionItem(resolution: Resolution, onClick: () -> Unit) {
 }
 
 @Composable
-fun CreateResolutionDialog(
-    onDismiss: () -> Unit,
-    onSave: (Resolution) -> Unit
-) {
+fun CreateResolutionDialog(onDismiss: () -> Unit, onSave: (Resolution) -> Unit) {
     var widthText by remember { mutableStateOf("") }
     var heightText by remember { mutableStateOf("") }
     var widthError by remember { mutableStateOf(false) }
@@ -291,13 +374,14 @@ fun CreateResolutionDialog(
     fun validateAndSave() {
         val width = widthText.toIntOrNull()
         val height = heightText.toIntOrNull()
-
         widthError = width == null || width <= 0
         heightError = height == null || height <= 0
-
-        if (!widthError && !heightError && width != null && height != null) {
-            onSave(Resolution(width, height))
-        }
+        if (!widthError && !heightError && width != null && height != null) onSave(
+            Resolution(
+                width,
+                height
+            )
+        )
     }
 
     AlertDialog(
@@ -313,10 +397,7 @@ fun CreateResolutionDialog(
             Column {
                 OutlinedTextField(
                     value = widthText,
-                    onValueChange = {
-                        widthText = it
-                        widthError = false
-                    },
+                    onValueChange = { widthText = it; widthError = false },
                     label = { Text("Width") },
                     placeholder = { Text("e.g. 1920") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -326,15 +407,10 @@ fun CreateResolutionDialog(
                     } else null,
                     modifier = Modifier.fillMaxWidth()
                 )
-
                 Spacer(modifier = Modifier.height(16.dp))
-
                 OutlinedTextField(
                     value = heightText,
-                    onValueChange = {
-                        heightText = it
-                        heightError = false
-                    },
+                    onValueChange = { heightText = it; heightError = false },
                     label = { Text("Height") },
                     placeholder = { Text("e.g. 1080") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -346,23 +422,13 @@ fun CreateResolutionDialog(
                 )
             }
         },
-        confirmButton = {
-            TextButton(onClick = { validateAndSave() }) {
-                Text("Save")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
+        confirmButton = { TextButton(onClick = { validateAndSave() }) { Text("Save") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
 }
 
 @Preview(showBackground = true)
 @Composable
 fun MainScreenPreview() {
-    ResolutionChangerTheme {
-        MainScreen()
-    }
+    ResolutionChangerTheme { MainScreen() }
 }
