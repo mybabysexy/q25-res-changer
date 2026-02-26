@@ -58,7 +58,7 @@ class ToggleShortcutActivity : Activity() {
             }
             "com.duc1607.resolutionchanger.action.SET_PRESET_INDEX" -> {
                 val index = extras?.getInt("index", -1) ?: -1
-                val list = ResolutionControl.resolutions()
+                val list = ResolutionControl.resolutions(this)
                 if (index in list.indices) {
                     val res = list[index]
                     ResolutionControl.setCurrentIndex(this, index)

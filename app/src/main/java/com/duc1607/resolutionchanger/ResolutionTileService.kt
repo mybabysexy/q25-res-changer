@@ -6,7 +6,7 @@ import android.service.quicksettings.TileService
 import android.widget.Toast
 
 class ResolutionTileService : TileService() {
-    private val resolutions get() = ResolutionControl.resolutions()
+    private val resolutions get() = ResolutionControl.resolutions(this)
 
     override fun onStartListening() {
         super.onStartListening()
